@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ipos
+      POSTGRES_PASSWORD: ipos_dev_password
+      POSTGRES_DB: ipos
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./server
+    environment:
+      PGHOST: db
+      PGUSER: ipos
+      PGPASSWORD: ipos_dev_password
+      PGDATABASE: ipos
+      PORT: 4000
+      JWT_SECRET: dev-secret-change-in-production
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "node src/db/init.js && node src/index.js"
+
+  web:
+    build: ./client
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
