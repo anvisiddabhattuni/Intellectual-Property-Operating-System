@@ -3,3 +3,6 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Basecamp update drafts stay local (Obsidian-style notes)
+(C) *.md
