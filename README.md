@@ -9,6 +9,17 @@ Built story-by-story from the Basecamp backlog (Colaberry internship project).
   log as the first Trust-Before-Intelligence (TBI) control. Sales data is
   seeded mock data for *Trust Before Intelligence*; real platform
   integrations arrive with STORY-001..003.
+- **STORY-006 — Payout Processing with Approval Gates:** payouts of a
+  month's calculated royalties are initiated by an admin; any amount above
+  the configurable threshold (`PAYOUT_APPROVAL_THRESHOLD`, default $1,000)
+  is HELD as `pending_approval` until a human approves or rejects it in the
+  dashboard. Approval processes the payment through the provider adapter —
+  real Stripe when `STRIPE_SECRET_KEY` is set, otherwise a clearly-labeled
+  simulated provider (`sim_` references, "simulated" chip in the UI).
+  Guards: no duplicate live payout per month (rejected attempts may be
+  retried), no paying a month with unpriced statement lines, no deciding a
+  payout that isn't pending. Every transition (`payout.held`, `.approved`,
+  `.rejected`, `.processed`, `.failed`) is audit-logged with actor and amount.
 - **STORY-005 — Royalty Calculation Automation:** a `contracts` table holds
   the predefined terms (rate per title × platform); the calculation engine
   applies them to sales and materializes monthly statements in

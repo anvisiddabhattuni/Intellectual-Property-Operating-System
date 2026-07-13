@@ -8,6 +8,7 @@ import { audit } from './audit.js';
 import { runRefresh, refreshStatus } from './refresh.js';
 import { startScheduler } from './scheduler.js';
 import { recalcRoyalties, royaltyStatements } from './royalty.js';
+import { initiatePayout, decidePayout, listPayouts, APPROVAL_THRESHOLD } from './payout.js';
 
 dotenv.config();
 
@@ -85,6 +86,32 @@ app.get('/api/royalties', requireAuth, async (req, res) => {
 app.post('/api/royalties/calculate', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
   await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'royalty.recalc.manual', detail: {} });
   res.json(await recalcRoyalties(req.user.tenantId, { trigger: 'manual' }));
+});
+
+// Payout history + the active approval threshold (STORY-006 read-model).
+app.get('/api/payouts', requireAuth, async (req, res) => {
+  res.json({ payouts: await listPayouts(req.user.tenantId), threshold: APPROVAL_THRESHOLD });
+});
+
+// Initiate a payout for one statement month (admin-only). Above-threshold
+// amounts are held for approval; below-threshold process immediately.
+app.post('/api/payouts', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const { periodStart } = req.body || {};
+  if (!periodStart) return res.status(400).json({ error: 'periodStart required (YYYY-MM-DD)' });
+  const result = await initiatePayout({
+    tenantId: req.user.tenantId, periodStart, requestedBy: req.user.email
+  });
+  res.status(result.error ? 409 : 201).json(result);
+});
+
+// Human decision on a held payout (admin-only): the approval gate itself.
+app.post('/api/payouts/:id/:decision(approve|reject)', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const result = await decidePayout({
+    payoutId: Number(req.params.id),
+    approve: req.params.decision === 'approve',
+    decidedBy: req.user.email
+  });
+  res.status(result.error ? 409 : 200).json(result);
 });
 
 // Data freshness + run history; any authenticated user can see freshness,

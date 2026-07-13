@@ -19,6 +19,7 @@ export default function Dashboard({ session, onLogout }) {
   const [auditRows, setAuditRows] = useState(null);
   const [refresh, setRefresh] = useState(null);
   const [statements, setStatements] = useState(null);
+  const [payouts, setPayouts] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
@@ -33,6 +34,9 @@ export default function Dashboard({ session, onLogout }) {
     api('/api/royalties', { token: session.token })
       .then((d) => setStatements(d.statements))
       .catch(() => setStatements(null));
+    api('/api/payouts', { token: session.token })
+      .then(setPayouts)
+      .catch(() => setPayouts(null));
     if (isAdmin) {
       api('/api/audit', { token: session.token })
         .then((d) => setAuditRows(d.audit))
@@ -40,6 +44,19 @@ export default function Dashboard({ session, onLogout }) {
     }
   };
   useEffect(load, [session, isAdmin]);
+
+  // POST an action (payout initiate/approve/reject), then reload everything.
+  const act = async (path, body = {}) => {
+    setBusy(true);
+    try {
+      await api(path, { method: 'POST', token: session.token, body });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+      load();
+    }
+  };
 
   const triggerRefresh = async (simulateFailure = []) => {
     setBusy(true);
@@ -230,6 +247,77 @@ export default function Dashboard({ session, onLogout }) {
               );
             })}
             <Box sx={{ mb: 4 }} />
+          </>
+        )}
+
+        {payouts && (
+          <>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Payouts
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                approval required above {money(payouts.threshold)}
+              </Typography>
+            </Typography>
+            <TableContainer component={Paper} sx={{ mb: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Period</TableCell>
+                    <TableCell align="right">Amount</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Requested by</TableCell>
+                    <TableCell>Decided by</TableCell>
+                    <TableCell>Reference</TableCell>
+                    {isAdmin && <TableCell align="right">Action</TableCell>}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {payouts.payouts.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell>{String(p.period_start).slice(0, 7)}</TableCell>
+                      <TableCell align="right">{money(p.amount)}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={p.status.replace('_', ' ')}
+                          color={p.status === 'paid' ? 'success'
+                            : p.status === 'pending_approval' ? 'warning'
+                            : p.status === 'rejected' ? 'default' : 'error'} />
+                        {p.detail?.provider === 'simulated' && p.status === 'paid' &&
+                          <Chip size="small" variant="outlined" label="simulated" sx={{ ml: 0.5 }} />}
+                      </TableCell>
+                      <TableCell>{p.requested_by}</TableCell>
+                      <TableCell>{p.decided_by || '—'}</TableCell>
+                      <TableCell><code>{p.provider_ref || '—'}</code></TableCell>
+                      {isAdmin && (
+                        <TableCell align="right">
+                          {p.status === 'pending_approval' && (
+                            <>
+                              <Button size="small" color="success" disabled={busy}
+                                onClick={() => act(`/api/payouts/${p.id}/approve`)}>Approve</Button>
+                              <Button size="small" color="error" disabled={busy}
+                                onClick={() => act(`/api/payouts/${p.id}/reject`)}>Reject</Button>
+                            </>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {isAdmin && statements && (
+              <Box sx={{ mb: 4 }}>
+                {[...new Set(statements.filter((s) => !s.missing_contract).map((s) => String(s.period_start).slice(0, 10)))]
+                  .filter((period) => !payouts.payouts.some(
+                    (p) => String(p.period_start).slice(0, 7) === period.slice(0, 7)
+                      && ['pending_approval', 'paid'].includes(p.status)))
+                  .map((period) => (
+                    <Button key={period} size="small" variant="outlined" disabled={busy} sx={{ mr: 1 }}
+                      onClick={() => act('/api/payouts', { periodStart: period })}>
+                      Initiate payout — {period.slice(0, 7)}
+                    </Button>
+                  ))}
+              </Box>
+            )}
           </>
         )}
 

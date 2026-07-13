@@ -65,6 +65,30 @@ CREATE TABLE IF NOT EXISTS royalty_calculations (
   UNIQUE (tenant_id, period_start, title, platform)
 );
 
+-- STORY-006: author payouts with an approval gate. A payout above the
+-- configured threshold is HELD (pending_approval) until a human decides;
+-- the full lifecycle stays in this one table so history is never lost.
+CREATE TABLE IF NOT EXISTS payouts (
+  id            SERIAL PRIMARY KEY,
+  tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+  period_start  DATE NOT NULL,
+  amount        NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  status        TEXT NOT NULL CHECK (status IN
+                  ('pending_approval', 'paid', 'rejected', 'failed')),
+  threshold     NUMERIC(12,2) NOT NULL,
+  requested_by  TEXT NOT NULL,
+  decided_by    TEXT,
+  decided_at    TIMESTAMPTZ,
+  provider_ref  TEXT,
+  detail        JSONB NOT NULL DEFAULT '{}',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One live payout per tenant-month; rejected/failed attempts may be retried.
+CREATE UNIQUE INDEX IF NOT EXISTS payouts_one_live_per_period
+  ON payouts (tenant_id, period_start)
+  WHERE status IN ('pending_approval', 'paid');
+
 -- STORY-004: every scheduler/manual refresh is recorded here (read-model for
 -- the dashboard freshness display and the admin data-ops panel).
 CREATE TABLE IF NOT EXISTS refresh_runs (
