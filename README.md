@@ -9,6 +9,16 @@ Built story-by-story from the Basecamp backlog (Colaberry internship project).
   log as the first Trust-Before-Intelligence (TBI) control. Sales data is
   seeded mock data for *Trust Before Intelligence*; real platform
   integrations arrive with STORY-001..003.
+- **STORY-005 — Royalty Calculation Automation:** a `contracts` table holds
+  the predefined terms (rate per title × platform); the calculation engine
+  applies them to sales and materializes monthly statements in
+  `royalty_calculations` (idempotent upsert), recalculated automatically
+  after every successful data refresh. Statements with per-title breakdowns
+  render on the dashboard (`GET /api/royalties`); sales lines with no
+  contract terms are flagged and raise an alert rather than being priced by
+  a default rate. Every calculation writes an audit entry with inputs,
+  per-line results, and timestamp. Verified exact against an independent
+  SQL cross-check (0.00 error, criterion is ±0.5%).
 - **STORY-004 — Daily Data Refresh Scheduler:** a cron-driven refresh engine
   (daily at 02:00, `REFRESH_CRON` to override) pulls from every registered
   platform connector and upserts into Postgres. A boot catch-up run fires if

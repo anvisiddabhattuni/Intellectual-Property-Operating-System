@@ -7,6 +7,7 @@ import { signToken, requireAuth, requireRole } from './auth.js';
 import { audit } from './audit.js';
 import { runRefresh, refreshStatus } from './refresh.js';
 import { startScheduler } from './scheduler.js';
+import { recalcRoyalties, royaltyStatements } from './royalty.js';
 
 dotenv.config();
 
@@ -72,6 +73,18 @@ app.get('/api/audit', requireAuth, requireRole('tenant_admin', 'super_admin'), a
     [req.user.tenantId]
   );
   res.json({ audit: rows });
+});
+
+// Royalty statements for the caller's tenant (STORY-005 read-model).
+app.get('/api/royalties', requireAuth, async (req, res) => {
+  res.json({ statements: await royaltyStatements(req.user.tenantId) });
+});
+
+// Manual recalculation (admin-only); normally runs automatically after
+// every successful data refresh.
+app.post('/api/royalties/calculate', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'royalty.recalc.manual', detail: {} });
+  res.json(await recalcRoyalties(req.user.tenantId, { trigger: 'manual' }));
 });
 
 // Data freshness + run history; any authenticated user can see freshness,

@@ -1,6 +1,7 @@
 import pool from './db/pool.js';
 import connectors from './connectors/index.js';
 import { audit } from './audit.js';
+import { recalcAllTenants } from './royalty.js';
 
 // Runs one refresh cycle across all registered platform connectors.
 // Records the run in refresh_runs, audits every step, and raises an alert
@@ -52,6 +53,12 @@ export async function runRefresh({ trigger, simulateFailure = [] } = {}) {
     action: status === 'succeeded' ? 'refresh.run' : 'refresh.error',
     detail: { runId: run.id, trigger, results }
   });
+
+  // Fresh sales data invalidates royalty statements — recalculate them
+  // automatically (STORY-005) so the read-model is never stale.
+  if (results.some((r) => r.ok)) {
+    await recalcAllTenants({ trigger: `refresh:${trigger}` });
+  }
 
   if (errors.length > 0) {
     await pool.query(

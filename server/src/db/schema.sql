@@ -35,6 +35,36 @@ CREATE TABLE IF NOT EXISTS sales (
 CREATE UNIQUE INDEX IF NOT EXISTS sales_daily_unique
   ON sales (tenant_id, platform, title, sale_date);
 
+-- STORY-005: predefined contractual terms — the source of truth for royalty
+-- math. Platform-reported royalty (sales.royalty) is kept separately; the
+-- calculated figure below is what authors are actually owed.
+CREATE TABLE IF NOT EXISTS contracts (
+  id             SERIAL PRIMARY KEY,
+  tenant_id      INTEGER NOT NULL REFERENCES tenants(id),
+  title          TEXT NOT NULL,
+  platform       TEXT NOT NULL,
+  royalty_rate   NUMERIC(5,4) NOT NULL CHECK (royalty_rate > 0 AND royalty_rate <= 1),
+  effective_from DATE NOT NULL DEFAULT '2000-01-01',
+  UNIQUE (tenant_id, title, platform, effective_from)
+);
+
+-- STORY-005: calculated royalty statements, one line per
+-- tenant/month/title/platform. Recalculation upserts (idempotent read-model).
+CREATE TABLE IF NOT EXISTS royalty_calculations (
+  id               SERIAL PRIMARY KEY,
+  tenant_id        INTEGER NOT NULL REFERENCES tenants(id),
+  period_start     DATE NOT NULL,
+  title            TEXT NOT NULL,
+  platform         TEXT NOT NULL,
+  units            INTEGER NOT NULL,
+  revenue          NUMERIC(12,2) NOT NULL,
+  royalty_rate     NUMERIC(5,4),
+  royalty_amount   NUMERIC(12,2),
+  missing_contract BOOLEAN NOT NULL DEFAULT false,
+  calculated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, period_start, title, platform)
+);
+
 -- STORY-004: every scheduler/manual refresh is recorded here (read-model for
 -- the dashboard freshness display and the admin data-ops panel).
 CREATE TABLE IF NOT EXISTS refresh_runs (

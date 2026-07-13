@@ -60,10 +60,26 @@ async function seed() {
     }
   }
 
+  // Contractual royalty terms (STORY-005). Deliberately not uniform across
+  // platforms so the demo shows terms being applied, not a flat percentage.
+  const CONTRACT_TERMS = [
+    ['Amazon KDP', 0.70],
+    ['Barnes & Noble', 0.65],
+    ['Kobo', 0.72]
+  ];
+  for (const [platform, rate] of CONTRACT_TERMS) {
+    await pool.query(
+      `INSERT INTO contracts (tenant_id, title, platform, royalty_rate)
+       VALUES ($1, 'Trust Before Intelligence', $2, $3)
+       ON CONFLICT (tenant_id, title, platform, effective_from) DO NOTHING`,
+      [tenantId, platform, rate]
+    );
+  }
+
   await pool.query(
     `INSERT INTO audit_log (tenant_id, actor, action, detail)
      VALUES ($1, 'system', 'db.seed', $2)`,
-    [tenantId, JSON.stringify({ users: DEMO_USERS.length, platforms: PLATFORMS })]
+    [tenantId, JSON.stringify({ users: DEMO_USERS.length, platforms: PLATFORMS, contracts: CONTRACT_TERMS.length })]
   );
 
   console.log('Database initialized and seeded.');

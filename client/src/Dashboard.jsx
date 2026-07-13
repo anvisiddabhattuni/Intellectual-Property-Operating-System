@@ -18,6 +18,7 @@ export default function Dashboard({ session, onLogout }) {
   const [data, setData] = useState(null);
   const [auditRows, setAuditRows] = useState(null);
   const [refresh, setRefresh] = useState(null);
+  const [statements, setStatements] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
@@ -29,6 +30,9 @@ export default function Dashboard({ session, onLogout }) {
     api('/api/refresh/status', { token: session.token })
       .then(setRefresh)
       .catch(() => setRefresh(null));
+    api('/api/royalties', { token: session.token })
+      .then((d) => setStatements(d.statements))
+      .catch(() => setStatements(null));
     if (isAdmin) {
       api('/api/audit', { token: session.token })
         .then((d) => setAuditRows(d.audit))
@@ -164,6 +168,68 @@ export default function Dashboard({ session, onLogout }) {
                 </TableBody>
               </Table>
             </TableContainer>
+          </>
+        )}
+
+        {statements?.length > 0 && (
+          <>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Royalty statements (calculated from contract terms)
+            </Typography>
+            {[...new Set(statements.map((s) => s.period_start))].map((period) => {
+              const monthLines = statements.filter((s) => s.period_start === period);
+              const titles = [...new Set(monthLines.map((s) => s.title))];
+              return (
+                <TableContainer component={Paper} key={period} sx={{ mb: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 'bold' }}>
+                          {new Date(period).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+                        </TableCell>
+                        <TableCell align="right">Units</TableCell>
+                        <TableCell align="right">Revenue</TableCell>
+                        <TableCell align="right">Contract rate</TableCell>
+                        <TableCell align="right">Royalty owed</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {titles.map((title) => {
+                        const lines = monthLines.filter((s) => s.title === title);
+                        const tot = lines.reduce((a, l) => ({
+                          units: a.units + l.units,
+                          revenue: a.revenue + Number(l.revenue),
+                          royalty: a.royalty + Number(l.royalty_amount || 0)
+                        }), { units: 0, revenue: 0, royalty: 0 });
+                        return [
+                          ...lines.map((l) => (
+                            <TableRow key={l.platform}>
+                              <TableCell sx={{ pl: 4 }}>{title} — {l.platform}</TableCell>
+                              <TableCell align="right">{l.units}</TableCell>
+                              <TableCell align="right">{money(l.revenue)}</TableCell>
+                              <TableCell align="right">
+                                {l.missing_contract
+                                  ? <Chip size="small" color="error" label="no contract" />
+                                  : `${(l.royalty_rate * 100).toFixed(0)}%`}
+                              </TableCell>
+                              <TableCell align="right">{l.missing_contract ? '—' : money(l.royalty_amount)}</TableCell>
+                            </TableRow>
+                          )),
+                          <TableRow key={`${title}-total`} sx={{ '& td': { fontWeight: 'bold' } }}>
+                            <TableCell>{title} — total</TableCell>
+                            <TableCell align="right">{tot.units}</TableCell>
+                            <TableCell align="right">{money(tot.revenue)}</TableCell>
+                            <TableCell align="right" />
+                            <TableCell align="right">{money(tot.royalty)}</TableCell>
+                          </TableRow>
+                        ];
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              );
+            })}
+            <Box sx={{ mb: 4 }} />
           </>
         )}
 
