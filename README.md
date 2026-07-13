@@ -9,6 +9,16 @@ Built story-by-story from the Basecamp backlog (Colaberry internship project).
   log as the first Trust-Before-Intelligence (TBI) control. Sales data is
   seeded mock data for *Trust Before Intelligence*; real platform
   integrations arrive with STORY-001..003.
+- **STORY-007 — AI Revenue Forecasts:** the AI Insights Agent fits a
+  transparent trend model (`ols-trend-v1`) to daily revenue and produces a
+  30-day forecast with a true 95% prediction interval (t-distribution,
+  per-day bounds that widen with distance from the data). Forecasts are
+  born `pending_review` — an admin approves or rejects, and **authors only
+  ever see approved forecasts** (dashboard chart: actuals solid, forecast
+  dashed, interval band, hover tooltips). Every generation is audit-logged
+  with the input summary, model coefficients, confidence level, and interval.
+  The math is isolated behind `generateForecast()` so a heavier model can
+  swap in without touching API/storage/approval.
 - **STORY-006 — Payout Processing with Approval Gates:** payouts of a
   month's calculated royalties are initiated by an admin; any amount above
   the configurable threshold (`PAYOUT_APPROVAL_THRESHOLD`, default $1,000)

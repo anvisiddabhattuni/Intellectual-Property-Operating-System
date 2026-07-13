@@ -68,9 +68,14 @@ What's blocked on Ram's approval, what unlocks next, offer to record a walkthrou
 - Bold the acceptance criteria and key decisions so a busy PM can scan in 15 seconds.
 - Write decisions as trade-offs ("chose X over Y because…"), never just "did X."
 
+## Simple Section
+- In a seperate section, can you add a simpler section of what you have coded, in summary just write a dumbed down version of everything in the update, and coded
+- Do not include this in the basecamp update
+
 ## Before marking `posted-ready`
 - [ ] Tied to one named task
 - [ ] Screenshots listed in Attachments
 - [ ] Decisions section has a Traceability line
 - [ ] Demo/repro steps included
 - [ ] Next step is concrete (not "figuring it out")
+- [ ] Do not update basecamp without my permission

@@ -4,6 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
 } from '@mui/material';
 import { api } from './api.js';
+import ForecastChart from './ForecastChart.jsx';
 
 const money = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
@@ -20,6 +21,7 @@ export default function Dashboard({ session, onLogout }) {
   const [refresh, setRefresh] = useState(null);
   const [statements, setStatements] = useState(null);
   const [payouts, setPayouts] = useState(null);
+  const [forecasts, setForecasts] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
@@ -37,6 +39,9 @@ export default function Dashboard({ session, onLogout }) {
     api('/api/payouts', { token: session.token })
       .then(setPayouts)
       .catch(() => setPayouts(null));
+    api('/api/forecasts', { token: session.token })
+      .then((d) => setForecasts(d.forecasts))
+      .catch(() => setForecasts(null));
     if (isAdmin) {
       api('/api/audit', { token: session.token })
         .then((d) => setAuditRows(d.audit))
@@ -249,6 +254,62 @@ export default function Dashboard({ session, onLogout }) {
             <Box sx={{ mb: 4 }} />
           </>
         )}
+
+        {forecasts && data && (() => {
+          // Daily revenue across platforms feeds the chart's "actual" line.
+          const byDay = {};
+          for (const s of data.sales) {
+            const d = s.sale_date.slice(0, 10);
+            byDay[d] = (byDay[d] || 0) + Number(s.revenue);
+          }
+          const historyAll = Object.entries(byDay)
+            .map(([date, revenue]) => ({ date, revenue }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+          const history = historyAll.slice(-60);
+          const approved = forecasts.find((f) => f.status === 'approved');
+          const pending = forecasts.filter((f) => f.status === 'pending_review');
+          const shown = approved || (isAdmin && pending[0]) || null;
+          return (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h6">Revenue forecast (AI Insights Agent)</Typography>
+                {isAdmin && (
+                  <Button size="small" variant="contained" disabled={busy}
+                    onClick={() => act('/api/forecasts', { horizonDays: 30 })}>
+                    Generate forecast
+                  </Button>
+                )}
+              </Box>
+              {shown ? (
+                <Paper sx={{ mb: 1, p: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, px: 1.5, pt: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="h5">{money(shown.total)}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      next {shown.horizon_days} days · 95% interval {money(shown.total_lower)} – {money(shown.total_upper)}
+                    </Typography>
+                    <Chip size="small"
+                      label={shown.status === 'approved' ? `approved by ${shown.reviewed_by}` : 'pending review'}
+                      color={shown.status === 'approved' ? 'success' : 'warning'} />
+                    {shown.status === 'pending_review' && isAdmin && (
+                      <>
+                        <Button size="small" color="success" disabled={busy}
+                          onClick={() => act(`/api/forecasts/${shown.id}/approve`)}>Approve</Button>
+                        <Button size="small" color="error" disabled={busy}
+                          onClick={() => act(`/api/forecasts/${shown.id}/reject`)}>Reject</Button>
+                      </>
+                    )}
+                  </Box>
+                  <ForecastChart history={history} points={shown.points} />
+                </Paper>
+              ) : (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  No approved forecast yet{isAdmin ? ' — generate one, then approve it.' : ' — check back soon.'}
+                </Alert>
+              )}
+              <Box sx={{ mb: 4 }} />
+            </>
+          );
+        })()}
 
         {payouts && (
           <>

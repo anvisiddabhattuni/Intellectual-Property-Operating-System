@@ -89,6 +89,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS payouts_one_live_per_period
   ON payouts (tenant_id, period_start)
   WHERE status IN ('pending_approval', 'paid');
 
+-- STORY-007: AI revenue forecasts. Each forecast is held for human review
+-- (approval gate) before authors can see and act on it.
+CREATE TABLE IF NOT EXISTS forecasts (
+  id            SERIAL PRIMARY KEY,
+  tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+  method        TEXT NOT NULL,
+  horizon_days  INTEGER NOT NULL,
+  confidence    NUMERIC(4,3) NOT NULL DEFAULT 0.95,
+  status        TEXT NOT NULL CHECK (status IN ('pending_review', 'approved', 'rejected')),
+  input_summary JSONB NOT NULL,
+  points        JSONB NOT NULL,
+  total         NUMERIC(12,2) NOT NULL,
+  total_lower   NUMERIC(12,2) NOT NULL,
+  total_upper   NUMERIC(12,2) NOT NULL,
+  generated_by  TEXT NOT NULL,
+  reviewed_by   TEXT,
+  reviewed_at   TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- STORY-004: every scheduler/manual refresh is recorded here (read-model for
 -- the dashboard freshness display and the admin data-ops panel).
 CREATE TABLE IF NOT EXISTS refresh_runs (

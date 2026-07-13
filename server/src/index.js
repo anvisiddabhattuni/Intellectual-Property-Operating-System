@@ -9,6 +9,7 @@ import { runRefresh, refreshStatus } from './refresh.js';
 import { startScheduler } from './scheduler.js';
 import { recalcRoyalties, royaltyStatements } from './royalty.js';
 import { initiatePayout, decidePayout, listPayouts, APPROVAL_THRESHOLD } from './payout.js';
+import { generateForecast, decideForecast, listForecasts } from './forecast.js';
 
 dotenv.config();
 
@@ -86,6 +87,31 @@ app.get('/api/royalties', requireAuth, async (req, res) => {
 app.post('/api/royalties/calculate', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
   await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'royalty.recalc.manual', detail: {} });
   res.json(await recalcRoyalties(req.user.tenantId, { trigger: 'manual' }));
+});
+
+// Forecasts (STORY-007). Authors receive only approved forecasts; admins
+// also see pending/rejected ones so they can review.
+app.get('/api/forecasts', requireAuth, async (req, res) => {
+  const includeUnapproved = ['tenant_admin', 'super_admin'].includes(req.user.role);
+  res.json({ forecasts: await listForecasts(req.user.tenantId, { includeUnapproved }) });
+});
+
+app.post('/api/forecasts', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const horizonDays = Math.min(Math.max(Number(req.body?.horizonDays) || 30, 7), 90);
+  const result = await generateForecast({
+    tenantId: req.user.tenantId, horizonDays, requestedBy: req.user.email
+  });
+  res.status(result.error ? 409 : 201).json(result);
+});
+
+// The approval gate: unreviewed AI output never reaches authors.
+app.post('/api/forecasts/:id/:decision(approve|reject)', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const result = await decideForecast({
+    forecastId: Number(req.params.id),
+    approve: req.params.decision === 'approve',
+    decidedBy: req.user.email
+  });
+  res.status(result.error ? 409 : 200).json(result);
 });
 
 // Payout history + the active approval threshold (STORY-006 read-model).
