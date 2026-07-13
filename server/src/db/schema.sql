@@ -31,6 +31,31 @@ CREATE TABLE IF NOT EXISTS sales (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- One row per platform/title/day so daily refreshes upsert instead of duplicating.
+CREATE UNIQUE INDEX IF NOT EXISTS sales_daily_unique
+  ON sales (tenant_id, platform, title, sale_date);
+
+-- STORY-004: every scheduler/manual refresh is recorded here (read-model for
+-- the dashboard freshness display and the admin data-ops panel).
+CREATE TABLE IF NOT EXISTS refresh_runs (
+  id          SERIAL PRIMARY KEY,
+  trigger     TEXT NOT NULL CHECK (trigger IN ('schedule', 'boot-catchup', 'manual')),
+  status      TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed')),
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  detail      JSONB NOT NULL DEFAULT '{}'
+);
+
+-- STORY-004: failed refreshes raise an alert for manual intervention.
+CREATE TABLE IF NOT EXISTS alerts (
+  id          SERIAL PRIMARY KEY,
+  source      TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  detail      JSONB NOT NULL DEFAULT '{}',
+  resolved    BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Append-only audit log (TBI: Transparent + Observability).
 -- No UPDATE/DELETE is ever issued by the app; triggers enforce append-only.
 CREATE TABLE IF NOT EXISTS audit_log (

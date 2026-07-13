@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import pool from './db/pool.js';
 import { signToken, requireAuth, requireRole } from './auth.js';
 import { audit } from './audit.js';
+import { runRefresh, refreshStatus } from './refresh.js';
+import { startScheduler } from './scheduler.js';
 
 dotenv.config();
 
@@ -72,5 +74,23 @@ app.get('/api/audit', requireAuth, requireRole('tenant_admin', 'super_admin'), a
   res.json({ audit: rows });
 });
 
+// Data freshness + run history; any authenticated user can see freshness,
+// full run detail and alerts power the admin data-ops panel.
+app.get('/api/refresh/status', requireAuth, async (_req, res) => {
+  res.json(await refreshStatus());
+});
+
+// Manual refresh trigger (admin-only). Body: { "simulateFailure": ["Kobo"] }
+// lets the demo exercise the error/alert path without breaking anything.
+app.post('/api/refresh', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const simulateFailure = Array.isArray(req.body?.simulateFailure) ? req.body.simulateFailure : [];
+  await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'refresh.manual', detail: { simulateFailure } });
+  const result = await runRefresh({ trigger: 'manual', simulateFailure });
+  res.status(result.status === 'succeeded' ? 200 : 502).json(result);
+});
+
 const port = Number(process.env.PORT || 4000);
-app.listen(port, () => console.log(`IPOS API listening on :${port}`));
+app.listen(port, () => {
+  console.log(`IPOS API listening on :${port}`);
+  startScheduler();
+});

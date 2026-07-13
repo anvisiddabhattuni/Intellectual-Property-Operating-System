@@ -7,22 +7,47 @@ import { api } from './api.js';
 
 const money = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
+const ago = (ts) => {
+  const mins = Math.round((Date.now() - new Date(ts)) / 60000);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  return hrs < 24 ? `${hrs} h ago` : `${Math.round(hrs / 24)} d ago`;
+};
+
 export default function Dashboard({ session, onLogout }) {
   const [data, setData] = useState(null);
   const [auditRows, setAuditRows] = useState(null);
+  const [refresh, setRefresh] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
 
-  useEffect(() => {
+  const load = () => {
     api('/api/sales', { token: session.token })
       .then(setData)
       .catch((e) => setError(e.message));
+    api('/api/refresh/status', { token: session.token })
+      .then(setRefresh)
+      .catch(() => setRefresh(null));
     if (isAdmin) {
       api('/api/audit', { token: session.token })
         .then((d) => setAuditRows(d.audit))
         .catch(() => setAuditRows(null));
     }
-  }, [session, isAdmin]);
+  };
+  useEffect(load, [session, isAdmin]);
+
+  const triggerRefresh = async (simulateFailure = []) => {
+    setBusy(true);
+    try {
+      await api('/api/refresh', { method: 'POST', token: session.token, body: { simulateFailure } });
+    } catch {
+      // failed runs are expected when simulating; status panel shows the result
+    } finally {
+      setBusy(false);
+      load();
+    }
+  };
 
   const grand = data?.totals?.reduce(
     (acc, t) => ({
@@ -46,6 +71,24 @@ export default function Dashboard({ session, onLogout }) {
 
       <Box sx={{ p: 3, maxWidth: 1100, mx: 'auto' }}>
         {error && <Alert severity="error">{error}</Alert>}
+
+        {refresh && (
+          <Alert
+            severity={refresh.staleHours == null ? 'warning' : refresh.staleHours < 24 ? 'success' : 'warning'}
+            sx={{ mb: 2 }}
+          >
+            {refresh.lastSuccessfulRefresh
+              ? `Data last refreshed ${ago(refresh.lastSuccessfulRefresh)} (target: every 24 h)`
+              : 'No successful data refresh recorded yet'}
+          </Alert>
+        )}
+
+        {isAdmin && refresh?.openAlerts?.length > 0 && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {refresh.openAlerts.length} open alert{refresh.openAlerts.length > 1 ? 's' : ''}:{' '}
+            {refresh.openAlerts[0].message}
+          </Alert>
+        )}
 
         {data && (
           <>
@@ -116,6 +159,51 @@ export default function Dashboard({ session, onLogout }) {
                       <TableCell align="right">{s.units}</TableCell>
                       <TableCell align="right">{money(s.revenue)}</TableCell>
                       <TableCell align="right">{money(s.royalty)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        )}
+
+        {isAdmin && refresh && (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+              <Typography variant="h6">Data operations (admin only)</Typography>
+              <Button size="small" variant="contained" disabled={busy}
+                onClick={() => triggerRefresh()}>
+                Refresh now
+              </Button>
+              <Button size="small" variant="outlined" color="error" disabled={busy}
+                onClick={() => triggerRefresh(['Kobo'])}>
+                Simulate Kobo failure
+              </Button>
+            </Box>
+            <TableContainer component={Paper} sx={{ maxHeight: 260, mb: 4 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Started</TableCell>
+                    <TableCell>Trigger</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Platforms</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {refresh.runs.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{new Date(r.started_at).toLocaleString()}</TableCell>
+                      <TableCell>{r.trigger}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={r.status}
+                          color={r.status === 'succeeded' ? 'success' : r.status === 'failed' ? 'error' : 'default'} />
+                      </TableCell>
+                      <TableCell>
+                        {(r.detail?.results || []).map((p) =>
+                          p.ok ? `${p.platform} ✓` : `${p.platform} ✗`
+                        ).join(' · ')}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
