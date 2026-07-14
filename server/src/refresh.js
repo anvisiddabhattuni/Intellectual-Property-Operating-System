@@ -2,6 +2,7 @@ import pool from './db/pool.js';
 import connectors from './connectors/index.js';
 import { audit } from './audit.js';
 import { recalcAllTenants } from './royalty.js';
+import { detectAnomalies } from './anomaly.js';
 
 // Runs one refresh cycle across all registered platform connectors.
 // Records the run in refresh_runs, audits every step, and raises an alert
@@ -55,9 +56,15 @@ export async function runRefresh({ trigger, simulateFailure = [] } = {}) {
   });
 
   // Fresh sales data invalidates royalty statements — recalculate them
-  // automatically (STORY-005) so the read-model is never stale.
+  // automatically (STORY-005), then scan the new data for anomalies
+  // (STORY-008). Both run on every ingest, which keeps the "flagged within
+  // 24 hours" promise as long as the daily refresh itself runs.
   if (results.some((r) => r.ok)) {
     await recalcAllTenants({ trigger: `refresh:${trigger}` });
+    const { rows: tenants } = await pool.query('SELECT id FROM tenants');
+    for (const t of tenants) {
+      await detectAnomalies(t.id, { trigger: `refresh:${trigger}` });
+    }
   }
 
   if (errors.length > 0) {

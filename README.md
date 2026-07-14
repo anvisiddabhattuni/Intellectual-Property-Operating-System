@@ -9,6 +9,17 @@ Built story-by-story from the Basecamp backlog (Colaberry internship project).
   log as the first Trust-Before-Intelligence (TBI) control. Sales data is
   seeded mock data for *Trust Before Intelligence*; real platform
   integrations arrive with STORY-001..003.
+- **STORY-008 — Revenue Anomaly Detection:** two transparent detectors run
+  automatically after every data refresh (so findings land well inside the
+  24-hour bar): `robust-zscore-v1` flags daily-revenue outliers against the
+  tenant's own history (median + MAD, |z| > 3.5), and `royalty-gap-v1`
+  flags months where the platform-reported royalty differs from the
+  contract-calculated figure by >1% (>5% = critical). Findings are stored
+  `open` and **escalate to a human** — admins get an in-app alert and a
+  review panel (mark reviewed / dismiss); the system never acts on an
+  anomaly by itself. Every scan and decision is audit-logged with method
+  and data. Also hardened the API: async route errors now return 500
+  instead of crashing the server process.
 - **STORY-007 — AI Revenue Forecasts:** the AI Insights Agent fits a
   transparent trend model (`ols-trend-v1`) to daily revenue and produces a
   30-day forecast with a true 95% prediction interval (t-distribution,

@@ -10,12 +10,26 @@ import { startScheduler } from './scheduler.js';
 import { recalcRoyalties, royaltyStatements } from './royalty.js';
 import { initiatePayout, decidePayout, listPayouts, APPROVAL_THRESHOLD } from './payout.js';
 import { generateForecast, decideForecast, listForecasts } from './forecast.js';
+import { detectAnomalies, reviewAnomaly, listAnomalies } from './anomaly.js';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Express 4 does not catch errors thrown in async handlers — without this,
+// one failed query kills the whole server process. Route every rejection
+// into the error middleware at the bottom instead.
+for (const method of ['get', 'post', 'put', 'delete']) {
+  const original = app[method].bind(app);
+  app[method] = (path, ...handlers) =>
+    handlers.length === 0
+      ? original(path) // app.get('setting') config lookups pass through
+      : original(path, ...handlers.map((fn) =>
+          (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
+        ));
+}
 
 app.get('/api/health', async (_req, res) => {
   try {
@@ -89,6 +103,24 @@ app.post('/api/royalties/calculate', requireAuth, requireRole('tenant_admin', 's
   res.json(await recalcRoyalties(req.user.tenantId, { trigger: 'manual' }));
 });
 
+// Anomalies (STORY-008). Analyst-facing: admins review; the system only
+// ever escalates — it takes no automatic action on an anomaly.
+app.get('/api/anomalies', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  res.json({ anomalies: await listAnomalies(req.user.tenantId) });
+});
+
+app.post('/api/anomalies/detect', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'anomaly.scan.manual', detail: {} });
+  res.json(await detectAnomalies(req.user.tenantId, { trigger: 'manual' }));
+});
+
+app.post('/api/anomalies/:id/:action(reviewed|dismissed)', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const result = await reviewAnomaly({
+    anomalyId: Number(req.params.id), action: req.params.action, reviewedBy: req.user.email
+  });
+  res.status(result.error ? 409 : 200).json(result);
+});
+
 // Forecasts (STORY-007). Authors receive only approved forecasts; admins
 // also see pending/rejected ones so they can review.
 app.get('/api/forecasts', requireAuth, async (req, res) => {
@@ -153,6 +185,11 @@ app.post('/api/refresh', requireAuth, requireRole('tenant_admin', 'super_admin')
   await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'refresh.manual', detail: { simulateFailure } });
   const result = await runRefresh({ trigger: 'manual', simulateFailure });
   res.status(result.status === 'succeeded' ? 200 : 502).json(result);
+});
+
+app.use((err, _req, res, _next) => {
+  console.error('request failed:', err.message);
+  res.status(500).json({ error: 'Internal error' });
 });
 
 const port = Number(process.env.PORT || 4000);

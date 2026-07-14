@@ -109,6 +109,28 @@ CREATE TABLE IF NOT EXISTS forecasts (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- STORY-008: detected revenue anomalies. Born 'open' and routed to a human
+-- (escalation) — the system never acts on an anomaly by itself.
+CREATE TABLE IF NOT EXISTS anomalies (
+  id           SERIAL PRIMARY KEY,
+  tenant_id    INTEGER NOT NULL REFERENCES tenants(id),
+  method       TEXT NOT NULL,
+  metric       TEXT NOT NULL,
+  platform     TEXT,
+  day          DATE NOT NULL,
+  observed     NUMERIC(12,2) NOT NULL,
+  expected     JSONB NOT NULL,
+  severity     TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
+  status       TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'reviewed', 'dismissed')),
+  reviewed_by  TEXT,
+  reviewed_at  TIMESTAMPTZ,
+  detected_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- NULLS NOT DISTINCT: platform is NULL for whole-tenant metrics, and a
+  -- re-scan must not re-flag the same day (plain UNIQUE treats NULLs as
+  -- always-distinct).
+  UNIQUE NULLS NOT DISTINCT (tenant_id, method, metric, platform, day)
+);
+
 -- STORY-004: every scheduler/manual refresh is recorded here (read-model for
 -- the dashboard freshness display and the admin data-ops panel).
 CREATE TABLE IF NOT EXISTS refresh_runs (

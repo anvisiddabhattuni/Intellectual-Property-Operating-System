@@ -22,6 +22,7 @@ export default function Dashboard({ session, onLogout }) {
   const [statements, setStatements] = useState(null);
   const [payouts, setPayouts] = useState(null);
   const [forecasts, setForecasts] = useState(null);
+  const [anomalies, setAnomalies] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
@@ -46,6 +47,9 @@ export default function Dashboard({ session, onLogout }) {
       api('/api/audit', { token: session.token })
         .then((d) => setAuditRows(d.audit))
         .catch(() => setAuditRows(null));
+      api('/api/anomalies', { token: session.token })
+        .then((d) => setAnomalies(d.anomalies))
+        .catch(() => setAnomalies(null));
     }
   };
   useEffect(load, [session, isAdmin]);
@@ -378,6 +382,70 @@ export default function Dashboard({ session, onLogout }) {
                     </Button>
                   ))}
               </Box>
+            )}
+          </>
+        )}
+
+        {isAdmin && anomalies && (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+              <Typography variant="h6">Anomalies (AI Insights Agent — human review required)</Typography>
+              <Button size="small" variant="contained" disabled={busy}
+                onClick={() => act('/api/anomalies/detect')}>
+                Scan now
+              </Button>
+            </Box>
+            {anomalies.length === 0 ? (
+              <Alert severity="success" sx={{ mb: 4 }}>No anomalies detected.</Alert>
+            ) : (
+              <TableContainer component={Paper} sx={{ maxHeight: 320, mb: 4 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Day</TableCell>
+                      <TableCell>What</TableCell>
+                      <TableCell align="right">Observed</TableCell>
+                      <TableCell>Expected</TableCell>
+                      <TableCell>Severity</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {anomalies.map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell>{String(a.day).slice(0, 10)}</TableCell>
+                        <TableCell>
+                          {a.method === 'royalty-gap-v1'
+                            ? `${a.platform}: reported royalty ≠ contract`
+                            : 'daily revenue outlier'}
+                        </TableCell>
+                        <TableCell align="right">{money(a.observed)}</TableCell>
+                        <TableCell>
+                          {a.method === 'royalty-gap-v1'
+                            ? `${money(a.expected.calculatedFromContract)} per contract (${a.expected.relativeGap})`
+                            : `median ${money(a.expected.median)} (z=${a.expected.zScore})`}
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={a.severity}
+                            color={a.severity === 'critical' ? 'error' : 'warning'} />
+                        </TableCell>
+                        <TableCell>{a.status}</TableCell>
+                        <TableCell align="right">
+                          {a.status === 'open' && (
+                            <>
+                              <Button size="small" disabled={busy}
+                                onClick={() => act(`/api/anomalies/${a.id}/reviewed`)}>Reviewed</Button>
+                              <Button size="small" color="inherit" disabled={busy}
+                                onClick={() => act(`/api/anomalies/${a.id}/dismissed`)}>Dismiss</Button>
+                            </>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </>
         )}

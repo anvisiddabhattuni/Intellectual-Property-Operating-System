@@ -4,10 +4,12 @@ This file governs how Claude drafts **every** Basecamp update in this folder. Ma
 Source of the format: Colaberry onboarding requires updates **tied to a specific task**, following
 **What → Progress → Decisions → Next**, with **screenshots**.
 
-## The 3 rules that matter (Colaberry grading)
+## Hard rules
 1. **Tie every update to ONE specific task** (a named backlog story / release / todo). No vague "worked on stuff."
 2. **Always include screenshots** — call them out in the Attachments line even if I drag them in later.
 3. **Momentum > perfection.** "I'm stuck" only counts if it names the next concrete step.
+4. **Never post to Basecamp without my explicit permission.** Draft only. I post.
+5. **Every file ends with a Plain-English Recap** (see below). It is for me, not for Basecamp.
 
 ## File naming
 `(C) YYYY-MM-DD — <ShortTaskName>.md` (e.g. `(C) 2026-07-12 — STORY-004 Daily Refresh Engine.md`)
@@ -27,7 +29,7 @@ tags: [colaberry, basecamp-update, ipos, <story/release slug>]
 ---
 ```
 
-## Required body structure (keep this order, keep the emoji headers)
+## Part 1 — The Basecamp update (copy-paste this part only)
 
 ```markdown
 # (C) Basecamp Update — <Task Short Name> (YYYY-MM-DD)
@@ -52,7 +54,7 @@ tags: [colaberry, basecamp-update, ipos, <story/release slug>]
 - Include a **Traceability:** line mapping the work to REQ-### / STORY-###.
 
 **➡️ Next**
-What's blocked on Ram's approval, what unlocks next, offer to record a walkthrough.
+What's blocked on Ram's approval, what unlocks next
 
 **📎 Attachments:** _[screenshot: X] · [screenshot: Y] · [README demo steps]_
 
@@ -62,15 +64,49 @@ What's blocked on Ram's approval, what unlocks next, offer to record a walkthrou
 - Exact steps or logins so the reviewer can reproduce it in under a minute.
 ```
 
-## Tone & length
+## Part 2 — Plain-English Recap (for me only, NEVER posted)
+
+Goes below a `<!-- NOT FOR BASECAMP -->` marker at the bottom of the file. Purpose: I should be
+able to read this and explain, out loud, exactly what got built without opening the code.
+
+```markdown
+<!-- NOT FOR BASECAMP -->
+---
+
+## 🧾 Plain-English Recap
+
+**In one sentence:** <what this change actually does, said like you'd say it to a friend>
+
+**Files touched**
+| File | What it does now | Why it changed |
+|---|---|---|
+| `path/to/file.py` | <one line, no jargon> | <one line> |
+
+**How it works, step by step**
+1. <trigger — what kicks this off>
+2. <what happens next, in order>
+3. <where the data ends up>
+
+**New words / concepts introduced**
+- **<term>** — <plain definition, one sentence, no other jargon inside it>
+
+**If it breaks, look here first:** <file or function + the most likely failure>
+```
+
+Rules for this section:
+- No jargon unless it's defined right there. Say "a background job that reruns every night," not "a cron-scheduled idempotent refresh."
+- Prefer analogies over precision when they conflict.
+- If Claude wrote code, every file it touched must appear in the table. No silent changes.
+- Keep it under ~250 words.
+
+## Tone & length (Part 1 only)
 - **Concise, confident, specific.** Short sentences. No filler, no hype.
 - Show the reviewer can *verify* it (steps, credentials, commit hash, passing scenarios).
 - Bold the acceptance criteria and key decisions so a busy PM can scan in 15 seconds.
 - Write decisions as trade-offs ("chose X over Y because…"), never just "did X."
 
-## Simple Section
-- In a seperate section, can you add a simpler section of what you have coded, in summary just write a dumbed down version of everything in the update, and coded
-- Do not include this in the basecamp update
+## Where to save these files
+- Save these files in Documents --> Anvi's Second Brain --> 02 Projects --> 05 Basecamp Updates
 
 ## Before marking `posted-ready`
 - [ ] Tied to one named task
@@ -78,4 +114,5 @@ What's blocked on Ram's approval, what unlocks next, offer to record a walkthrou
 - [ ] Decisions section has a Traceability line
 - [ ] Demo/repro steps included
 - [ ] Next step is concrete (not "figuring it out")
-- [ ] Do not update basecamp without my permission
+- [ ] Plain-English Recap written, and it's below the `<!-- NOT FOR BASECAMP -->` marker
+- [ ] Every file Claude touched appears in the Recap table
