@@ -131,6 +131,22 @@ CREATE TABLE IF NOT EXISTS anomalies (
   UNIQUE NULLS NOT DISTINCT (tenant_id, method, metric, platform, day)
 );
 
+-- STORY-009: AI marketing recommendations. Same approval gate as forecasts:
+-- authors only ever see recommendations a human approved.
+CREATE TABLE IF NOT EXISTS marketing_recommendations (
+  id             SERIAL PRIMARY KEY,
+  tenant_id      INTEGER NOT NULL REFERENCES tenants(id),
+  provider       TEXT NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('pending_review', 'approved', 'rejected')),
+  recommendations JSONB NOT NULL,
+  filtered_out   INTEGER NOT NULL DEFAULT 0,
+  input_summary  JSONB NOT NULL,
+  generated_by   TEXT NOT NULL,
+  reviewed_by    TEXT,
+  reviewed_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- STORY-004: every scheduler/manual refresh is recorded here (read-model for
 -- the dashboard freshness display and the admin data-ops panel).
 CREATE TABLE IF NOT EXISTS refresh_runs (

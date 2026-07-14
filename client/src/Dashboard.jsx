@@ -23,6 +23,7 @@ export default function Dashboard({ session, onLogout }) {
   const [payouts, setPayouts] = useState(null);
   const [forecasts, setForecasts] = useState(null);
   const [anomalies, setAnomalies] = useState(null);
+  const [marketing, setMarketing] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
@@ -43,6 +44,9 @@ export default function Dashboard({ session, onLogout }) {
     api('/api/forecasts', { token: session.token })
       .then((d) => setForecasts(d.forecasts))
       .catch(() => setForecasts(null));
+    api('/api/marketing', { token: session.token })
+      .then((d) => setMarketing(d.recommendations))
+      .catch(() => setMarketing(null));
     if (isAdmin) {
       api('/api/audit', { token: session.token })
         .then((d) => setAuditRows(d.audit))
@@ -311,6 +315,68 @@ export default function Dashboard({ session, onLogout }) {
                 </Alert>
               )}
               <Box sx={{ mb: 4 }} />
+            </>
+          );
+        })()}
+
+        {marketing && (() => {
+          const approved = marketing.find((m) => m.status === 'approved');
+          const pending = marketing.filter((m) => m.status === 'pending_review');
+          const shown = approved || (isAdmin && pending[0]) || null;
+          return (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h6">Marketing recommendations (AI Insights Agent)</Typography>
+                {isAdmin && (
+                  <Button size="small" variant="contained" disabled={busy}
+                    onClick={() => act('/api/marketing')}>
+                    Generate
+                  </Button>
+                )}
+              </Box>
+              {shown ? (
+                <Paper sx={{ mb: 4, p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+                    <Chip size="small"
+                      label={shown.status === 'approved' ? `approved by ${shown.reviewed_by}` : 'pending review'}
+                      color={shown.status === 'approved' ? 'success' : 'warning'} />
+                    <Chip size="small" variant="outlined" label={shown.provider} />
+                    <Typography variant="body2" color="text.secondary">
+                      relevance ≥ 80% enforced{shown.filtered_out > 0 ? ` · ${shown.filtered_out} below-bar suggestion(s) filtered out` : ''}
+                    </Typography>
+                    {shown.status === 'pending_review' && isAdmin && (
+                      <>
+                        <Button size="small" color="success" disabled={busy}
+                          onClick={() => act(`/api/marketing/${shown.id}/approve`)}>Approve</Button>
+                        <Button size="small" color="error" disabled={busy}
+                          onClick={() => act(`/api/marketing/${shown.id}/reject`)}>Reject</Button>
+                      </>
+                    )}
+                  </Box>
+                  <Grid container spacing={2}>
+                    {shown.recommendations.map((r, i) => (
+                      <Grid item xs={12} md={6} key={i}>
+                        <Card variant="outlined" sx={{ height: '100%' }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1 }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{r.title}</Typography>
+                              <Chip size="small" label={`${r.relevance}%`} color="primary" variant="outlined" />
+                            </Box>
+                            <Typography variant="body2" sx={{ mt: 1 }}>{r.action}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                              Evidence: {r.evidence.join(' · ')}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+              ) : (
+                <Alert severity="info" sx={{ mb: 4 }}>
+                  No approved recommendations yet{isAdmin ? ' — generate a set, then approve it.' : ' — check back soon.'}
+                </Alert>
+              )}
             </>
           );
         })()}

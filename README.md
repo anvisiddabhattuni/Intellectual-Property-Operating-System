@@ -9,6 +9,17 @@ Built story-by-story from the Basecamp backlog (Colaberry internship project).
   log as the first Trust-Before-Intelligence (TBI) control. Sales data is
   seeded mock data for *Trust Before Intelligence*; real platform
   integrations arrive with STORY-001..003.
+- **STORY-009 — Personalized Marketing Recommendations:** the AI Insights
+  Agent builds an author profile from real tenant data (30-day platform
+  performance, contract rates, approved forecast, open anomalies) and asks
+  Claude (`claude-opus-4-8` via the official SDK, structured outputs) for
+  3–5 concrete recommendations, each with cited evidence and a relevance
+  score. **Relevance ≥ 80% is enforced in code** — below-bar suggestions
+  are filtered and the count recorded. Without `ANTHROPIC_API_KEY` a
+  clearly-labeled rule-based simulated provider generates from the same
+  profile, so the demo always runs. Same approval gate as forecasts:
+  authors only see human-approved sets. Every generation is audit-logged
+  with inputs, all scores, and token usage.
 - **STORY-008 — Revenue Anomaly Detection:** two transparent detectors run
   automatically after every data refresh (so findings land well inside the
   24-hour bar): `robust-zscore-v1` flags daily-revenue outliers against the

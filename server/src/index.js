@@ -11,6 +11,7 @@ import { recalcRoyalties, royaltyStatements } from './royalty.js';
 import { initiatePayout, decidePayout, listPayouts, APPROVAL_THRESHOLD } from './payout.js';
 import { generateForecast, decideForecast, listForecasts } from './forecast.js';
 import { detectAnomalies, reviewAnomaly, listAnomalies } from './anomaly.js';
+import { generateRecommendations, decideRecommendation, listRecommendations } from './marketing.js';
 
 dotenv.config();
 
@@ -101,6 +102,28 @@ app.get('/api/royalties', requireAuth, async (req, res) => {
 app.post('/api/royalties/calculate', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
   await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'royalty.recalc.manual', detail: {} });
   res.json(await recalcRoyalties(req.user.tenantId, { trigger: 'manual' }));
+});
+
+// Marketing recommendations (STORY-009). Authors receive only approved
+// sets; admins generate and review. AI drafts, a human publishes.
+app.get('/api/marketing', requireAuth, async (req, res) => {
+  const includeUnapproved = ['tenant_admin', 'super_admin'].includes(req.user.role);
+  res.json({ recommendations: await listRecommendations(req.user.tenantId, { includeUnapproved }) });
+});
+
+app.post('/api/marketing', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'marketing.generate.manual', detail: {} });
+  const result = await generateRecommendations({ tenantId: req.user.tenantId, requestedBy: req.user.email });
+  res.status(result.error ? 409 : 201).json(result);
+});
+
+app.post('/api/marketing/:id/:decision(approve|reject)', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const result = await decideRecommendation({
+    recId: Number(req.params.id),
+    approve: req.params.decision === 'approve',
+    decidedBy: req.user.email
+  });
+  res.status(result.error ? 409 : 200).json(result);
 });
 
 // Anomalies (STORY-008). Analyst-facing: admins review; the system only
