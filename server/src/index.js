@@ -12,6 +12,7 @@ import { initiatePayout, decidePayout, listPayouts, APPROVAL_THRESHOLD } from '.
 import { generateForecast, decideForecast, listForecasts } from './forecast.js';
 import { detectAnomalies, reviewAnomaly, listAnomalies } from './anomaly.js';
 import { generateRecommendations, decideRecommendation, listRecommendations } from './marketing.js';
+import { ingestReport, PLATFORM_BY_SLUG } from './integrations.js';
 
 dotenv.config();
 
@@ -102,6 +103,18 @@ app.get('/api/royalties', requireAuth, async (req, res) => {
 app.post('/api/royalties/calculate', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
   await audit({ tenantId: req.user.tenantId, actor: req.user.email, action: 'royalty.recalc.manual', detail: {} });
   res.json(await recalcRoyalties(req.user.tenantId, { trigger: 'manual' }));
+});
+
+// Platform report ingestion (STORY-001 Amazon / 002 B&N / 003 Kobo).
+// Admin uploads an exported sales report (CSV); it is parsed, integrity-checked,
+// and stored so the platform's revenue appears in the unified dashboard.
+app.post('/api/integrations/:platform/upload', requireAuth, requireRole('tenant_admin', 'super_admin'), async (req, res) => {
+  const platform = PLATFORM_BY_SLUG[req.params.platform];
+  if (!platform) return res.status(404).json({ error: 'Unknown platform' });
+  const csv = req.body?.csv;
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv (report text) required' });
+  const result = await ingestReport({ tenantId: req.user.tenantId, platform, csv, actor: req.user.email });
+  res.status(result.error ? 400 : 201).json(result);
 });
 
 // Marketing recommendations (STORY-009). Authors receive only approved

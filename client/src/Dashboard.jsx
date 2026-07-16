@@ -24,6 +24,7 @@ export default function Dashboard({ session, onLogout }) {
   const [forecasts, setForecasts] = useState(null);
   const [anomalies, setAnomalies] = useState(null);
   const [marketing, setMarketing] = useState(null);
+  const [ingest, setIngest] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isAdmin = ['tenant_admin', 'super_admin'].includes(session.user.role);
@@ -77,6 +78,22 @@ export default function Dashboard({ session, onLogout }) {
       await api('/api/refresh', { method: 'POST', token: session.token, body: { simulateFailure } });
     } catch {
       // failed runs are expected when simulating; status panel shows the result
+    } finally {
+      setBusy(false);
+      load();
+    }
+  };
+
+  // Upload a platform's exported sales report (STORY-001/002/003).
+  const uploadReport = async (slug, file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const csv = await file.text();
+      const r = await api(`/api/integrations/${slug}/upload`, { method: 'POST', token: session.token, body: { csv } });
+      setIngest((prev) => ({ ...prev, [slug]: r.summary }));
+    } catch (e) {
+      setError(e.message);
     } finally {
       setBusy(false);
       load();
@@ -513,6 +530,64 @@ export default function Dashboard({ session, onLogout }) {
                 </Table>
               </TableContainer>
             )}
+          </>
+        )}
+
+        {isAdmin && (
+          <>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Platform integrations (admin only)
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                upload an exported sales report — parsed, integrity-checked, and added to the dashboard
+              </Typography>
+            </Typography>
+            <TableContainer component={Paper} sx={{ mb: 4 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Platform</TableCell>
+                    <TableCell>Report (CSV)</TableCell>
+                    <TableCell>Last ingest result</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { slug: 'amazon-kdp', name: 'Amazon KDP', story: 'STORY-001' },
+                    { slug: 'barnes-noble', name: 'Barnes & Noble', story: 'STORY-002' },
+                    { slug: 'kobo', name: 'Kobo', story: 'STORY-003' }
+                  ].map((p) => {
+                    const s = ingest[p.slug];
+                    return (
+                      <TableRow key={p.slug}>
+                        <TableCell>
+                          {p.name}
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{p.story}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Button size="small" variant="outlined" component="label" disabled={busy}>
+                            Upload report
+                            <input type="file" accept=".csv,text/csv" hidden
+                              onChange={(e) => { uploadReport(p.slug, e.target.files[0]); e.target.value = ''; }} />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          {s ? (
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Chip size="small" color="success" label={`${s.rowsAccepted} imported`} />
+                              {s.rowsRejected > 0 &&
+                                <Chip size="small" color="error" label={`${s.rowsRejected} rejected`} />}
+                              <Typography variant="caption" color="text.secondary">
+                                {s.daysUpserted} day(s) · {s.titles.join(', ')}
+                              </Typography>
+                            </Box>
+                          ) : <Typography variant="caption" color="text.secondary">—</Typography>}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </>
         )}
 
