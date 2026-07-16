@@ -6,10 +6,11 @@ Source of the format: Colaberry onboarding requires updates **tied to a specific
 
 ## Hard rules
 1. **Tie every update to ONE specific task** (a named backlog story / release / todo). No vague "worked on stuff."
-2. **Always include screenshots** — call them out in the Attachments line even if I drag them in later.
+2. **Lots of screenshots — not one.** Every update carries multiple captioned screenshots: at minimum one per acceptance criterion and one per demo step. Call each out in Attachments with a caption even if I drag the image in later. A screenshot-light update is not done.
 3. **Momentum > perfection.** "I'm stuck" only counts if it names the next concrete step.
 4. **Never post to Basecamp without my explicit permission.** Draft only. I post.
 5. **Every file ends with a Plain-English Recap** (see below). It is for me, not for Basecamp.
+6. **Before a ticket is closed, give a detailed stage report — never a terse summary.** The update must answer, in depth: *what did you do this stage, what were the results, and what are the deliverables?* Show the work — commit hashes, passing test/scenario output, live-verified behavior, and every artifact produced (code, docs, tests, demo URLs, review notes) — backed by the screenshots from rule 2. When in doubt, more detail.
 
 ## File naming
 `(C) YYYY-MM-DD — <ShortTaskName>.md` (e.g. `(C) 2026-07-12 — STORY-004 Daily Refresh Engine.md`)
@@ -53,10 +54,16 @@ tags: [colaberry, basecamp-update, ipos, <story/release slug>]
 - Each bullet = a decision + the *why* (the PM reasoning). This is the interview-gold section.
 - Include a **Traceability:** line mapping the work to REQ-### / STORY-###.
 
+**📦 Deliverables** *(required — what a reviewer can open right now)*
+- One bullet per artifact produced this stage, each with where to find it: e.g.
+  code (commit hash + key files), a test suite (how to run it + result), a doc /
+  review note (path), a demo URL / login, an evidence capture. If it isn't listed
+  here, it doesn't count as delivered.
+
 **➡️ Next**
 What's blocked on Ram's approval, what unlocks next
 
-**📎 Attachments:** _[screenshot: X] · [screenshot: Y] · [README demo steps]_
+**📎 Attachments:** _lots of captioned screenshots — one per acceptance criterion and per demo step, e.g. [screenshot: login as tenant A → sees only their book] · [screenshot: test suite green] · [screenshot: audit-log entry] · [README demo steps]_
 
 ---
 
@@ -110,7 +117,9 @@ Rules for this section:
 
 ## Before marking `posted-ready`
 - [ ] Tied to one named task
-- [ ] Screenshots listed in Attachments
+- [ ] **Multiple captioned screenshots** listed in Attachments (≥1 per acceptance criterion / demo step) — not a single image
+- [ ] **Deliverables section present**, listing every artifact with where to find it (commit hash, test command + result, doc paths, demo login)
+- [ ] **Detailed stage report** — what I did / the results / the deliverables are all answered in depth, with evidence (commit, test output, live-verified behavior), not a terse summary
 - [ ] Decisions section has a Traceability line
 - [ ] Demo/repro steps included
 - [ ] Next step is concrete (not "figuring it out")
