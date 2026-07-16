@@ -189,3 +189,70 @@ DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log;
 CREATE TRIGGER audit_log_no_update
   BEFORE UPDATE OR DELETE ON audit_log
   FOR EACH ROW EXECUTE FUNCTION forbid_audit_mutation();
+
+-- ============================================================================
+-- STORY-010: Multi-tenancy with data isolation — Row-Level Security backstop.
+--
+-- The app already filters every query by tenant_id (application layer). RLS is
+-- the database-enforced second line: even a query that forgets its WHERE
+-- clause — or a future bug — cannot read or write across tenants. Policies
+-- read the transaction-local `app.current_tenant` set by the pool wrapper
+-- (src/db/pool.js) from the authenticated request's tenant.
+--
+-- FORCE is required because the app connects as the table owner, and owners
+-- bypass RLS by default. An unset/empty setting means "no tenant context"
+-- (background jobs, seed, login) and is allowed platform-wide on purpose.
+-- ============================================================================
+
+-- Standard row policy for tables that carry a tenant_id column.
+DO $rls$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'users', 'sales', 'contracts', 'royalty_calculations',
+    'payouts', 'forecasts', 'anomalies', 'marketing_recommendations'
+  ] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    EXECUTE format($p$
+      CREATE POLICY tenant_isolation ON %I
+        USING (
+          current_setting('app.current_tenant', true) IS NULL
+          OR current_setting('app.current_tenant', true) = ''
+          OR tenant_id::text = current_setting('app.current_tenant', true)
+        )
+        WITH CHECK (
+          current_setting('app.current_tenant', true) IS NULL
+          OR current_setting('app.current_tenant', true) = ''
+          OR tenant_id::text = current_setting('app.current_tenant', true)
+        )
+    $p$, t);
+  END LOOP;
+END
+$rls$;
+
+-- tenants: the tenant IS the row, so scope by id (not tenant_id).
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenants FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON tenants;
+CREATE POLICY tenant_isolation ON tenants
+  USING (
+    current_setting('app.current_tenant', true) IS NULL
+    OR current_setting('app.current_tenant', true) = ''
+    OR id::text = current_setting('app.current_tenant', true)
+  );
+
+-- audit_log: system entries have tenant_id NULL and must stay visible to a
+-- tenant's own admins (existing behavior); a NULL row is no one's tenant data.
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON audit_log;
+CREATE POLICY tenant_isolation ON audit_log
+  USING (
+    current_setting('app.current_tenant', true) IS NULL
+    OR current_setting('app.current_tenant', true) = ''
+    OR tenant_id IS NULL
+    OR tenant_id::text = current_setting('app.current_tenant', true)
+  )
+  WITH CHECK (true);  -- append-only log: never block a write

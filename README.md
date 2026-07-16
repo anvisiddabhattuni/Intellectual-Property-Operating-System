@@ -9,6 +9,17 @@ Built story-by-story from the Basecamp backlog (Colaberry internship project).
   log as the first Trust-Before-Intelligence (TBI) control. Sales data is
   seeded mock data for *Trust Before Intelligence*; real platform
   integrations arrive with STORY-001..003.
+- **STORY-010 — Multi-Tenancy with Data Isolation:** the platform now hosts
+  two tenants (Ram Katamaraja / *Trust Before Intelligence*, and Maya Chen /
+  *The Long Game*), each with its own users, book, contracts, and sales.
+  Isolation is enforced in **two layers**: the app filters every query by
+  `tenant_id` (as before), and **PostgreSQL Row-Level Security** (FORCE, on
+  every tenant table) is the database-enforced backstop — even a query that
+  forgets its `WHERE tenant_id` cannot read or write across tenants. A
+  per-request tenant context (`AsyncLocalStorage` → a transaction-local
+  Postgres setting the RLS policies read) scopes authenticated requests;
+  background jobs and the seed run platform-wide. A `node --test` suite
+  (`npm test`) proves isolation at the database and API levels.
 - **STORY-009 — Personalized Marketing Recommendations:** the AI Insights
   Agent builds an author profile from real tenant data (30-day platform
   performance, contract rates, approved forecast, open anomalies) and asks
@@ -118,6 +129,27 @@ npm run dev                       # http://localhost:5173
 4. Trust check: the audit log shows every login and every sales read
    (who / what / when). The table is append-only — `UPDATE`/`DELETE` are
    rejected by a database trigger.
+
+## Multi-tenant isolation demo (STORY-010)
+
+The platform hosts two isolated tenants:
+
+| Tenant | Book | Author login | Admin login |
+|---|---|---|---|
+| Ram Katamaraja | *Trust Before Intelligence* | `ram@ipos.demo` / `author123` | `admin@ipos.demo` / `admin123` |
+| Maya Chen | *The Long Game* | `maya@ipos.demo` / `author123` | `admin2@ipos.demo` / `admin123` |
+
+1. Sign in as `ram@ipos.demo` — you see *Trust Before Intelligence* only.
+2. Sign out, sign in as `maya@ipos.demo` — you see *The Long Game* only.
+   Neither author can see, or reach, the other's data.
+3. Run the isolation test suite (server must be running for the API checks):
+   ```bash
+   cd server && npm test
+   ```
+   It proves at the **database** level that a query with no `WHERE tenant_id`
+   is still confined to one tenant (Row-Level Security), that a tenant cannot
+   write into another tenant, and at the **API** level that each login returns
+   only its own tenant's data.
 
 ### API quick check
 
